@@ -14,8 +14,9 @@ from PIL import Image
 import skimage.exposure
 import librosa
 import soundfile
-import moviepy.editor as mpy
+from moviepy.audio.io.AudioFileClip import AudioFileClip
 from moviepy.audio.AudioClip import AudioArrayClip
+from moviepy.video.io.ImageSequenceClip import ImageSequenceClip
 import pygit2
 from importlib import import_module
 
@@ -395,7 +396,7 @@ class LucidSonicDream:
     motion_react = self.motion_react * 20 / fps
 
     # Get number of noise vectors to initialize (based on speed_fpm)
-    num_init_noise = round(librosa.get_duration(self.wav, self.sr) / 60 * self.speed_fpm)
+    num_init_noise = round(librosa.get_duration(y=self.wav, sr=self.sr) / 60 * self.speed_fpm)
     
     # If num_init_noise < 2, simply initialize the same 
     # noise vector for all frames 
@@ -595,7 +596,7 @@ class LucidSonicDream:
                 with torch.no_grad():
                     w_batch = self.Gs.mapping(noise_batch, class_batch.to(device), truncation_psi=self.truncation_psi)
                     image_batch = self.Gs.synthesis(w_batch, **Gs_syn_kwargs)
-                image_batch = (image_batch.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255).to(torch.uint8).squeeze(0).cpu().numpy()
+                image_batch = (image_batch.permute(0, 2, 3, 1) * 127.5 + 128).clamp(0, 255).to(torch.uint8).cpu().numpy()
 
         # For each image in generated batch: apply effects, resize, and save
         for j, array in enumerate(image_batch): 
@@ -611,7 +612,9 @@ class LucidSonicDream:
         
             file_names.append(file_name)
             final_images.append(array)
-            
+         
+        print(len(final_images), final_images[0].shape)
+        print(len(file_names), file_names[0])
             
         if len(final_images) > 1000:
             self.store_imgs(file_names, final_images, resolution)
@@ -623,6 +626,7 @@ class LucidSonicDream:
   def store_imgs(self, file_names, final_images, resolution):
     for file_name, final_image in tqdm(zip(file_names, final_images), position=1, leave=False, desc="Storing frames", total=len(file_names)):
         with Image.fromarray(final_image, mode='RGB') as final_image_PIL:
+            
             # If resolution is provided, resize
             if resolution:
                 final_image_PIL = final_image_PIL.resize((resolution, resolution))
@@ -763,8 +767,8 @@ class LucidSonicDream:
     soundfile.write('tmp.wav',wav_output, sr_output)
 
     # Generate final video
-    audio = mpy.AudioFileClip('tmp.wav', fps=self.sr * 2)
-    video = mpy.ImageSequenceClip(self.frames_dir, fps=self.sr / self.frame_duration)
+    audio = AudioFileClip('tmp.wav', fps=self.sr * 2)
+    video = ImageSequenceClip(self.frames_dir, fps=self.sr / self.frame_duration)
     video = video.set_audio(audio)
     video.write_videofile(file_name,audio_codec='aac')
 
